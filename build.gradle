@@ -1,0 +1,87 @@
+plugins {
+    id 'java'
+    id 'war'
+    id 'org.springframework.boot' version '3.4.3'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'edu.umich.med.michr'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.oracle.database.jdbc:ojdbc11:23.7.0.25.01'
+    implementation 'com.oracle.database.jdbc:ucp:23.7.0.25.01'
+
+    // Exclude Spring Boot’s default logging (Logback)
+    implementation('org.springframework.boot:spring-boot-starter-web') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'jakarta.inject:jakarta.inject-api:2.0.1'
+
+    // Use only Log4j2 for logging
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+
+    // SLF4J to Log4j2 Bridge - **KEEP ONLY THIS**
+    implementation 'org.apache.logging.log4j:log4j-slf4j2-impl:2.21.1'
+
+    // REMOVE log4j-to-slf4j (which causes conflicts)
+    configurations {
+        configureEach {
+            exclude group: 'org.apache.logging.log4j', module: 'log4j-to-slf4j'
+            exclude group: 'ch.qos.logback', module: 'logback-classic'
+        }
+    }
+
+    // Development dependencies
+    developmentOnly 'com.h2database:h2'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+    providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
+
+    // Testing dependencies
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'com.h2database:h2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    systemProperty 'spring.profiles.active', 'test'
+    //If you like tests to run even if when they are not changed since the last run uncomment the following line
+    //outputs.upToDateWhen { false }
+}
+
+bootRun {
+    if (project.hasProperty('env')) {
+        systemProperty 'env', project.property('env')
+    }
+}
+
+test {
+    testLogging {
+        events = ["passed", "skipped", "failed", "standardOut", "standardError"]
+        showExceptions = true
+        exceptionFormat = "full"
+        showCauses = true
+        showStackTraces = true
+
+        // Display a summary after tests complete
+        afterSuite { desc, result ->
+            if (!desc.parent) { // will match the outermost suite
+                println "\nTest Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)"
+            }
+        }
+    }
+}

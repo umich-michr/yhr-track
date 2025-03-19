@@ -1,0 +1,92 @@
+# Compiled Source #
+###################
+/lib
+/target
+*.class
+# Package Files #
+#################
+*.war
+*.ear
+# Eclipse config files #
+########################
+*.rdb
+.settings/
+.classpath
+classpath:
+file:
+.project
+.metadata
+*.pydevproject
+bin/**
+tmp/**
+tmp/**/*
+*.tmp
+# *.bak
+*.swp
+*.log
+*~.nib
+local.properties
+.loadpath
+
+# External tool builders #
+##########################
+.externalToolBuilders/
+
+# Locally stored "Eclipse launch configurations" #
+##################################################
+*.launch
+
+# CDT-specific #
+################
+.cproject
+
+# PDT-specific #
+################
+.buildpath
+*.jpage
+
+*.h2.db
+*.mv.db
+*.hprof
+*.trace.db
+/src/test/resources/DbPrototype/*.h2.db
+/src/test/resources/DbPrototype/*.lock.db
+/src/test/resources/DbPrototype/*.trace.db
+/src/main/webapp/WEB-INF/db/h2/*.h2.db
+/src/main/webapp/WEB-INF/db/h2/*.lock.db
+/src/main/webapp/WEB-INF/db/h2/*.trace.db
+/src/test/resources/H2TestDB/*.h2.db
+/src/test/resources/H2TestDB/*.lock.db
+/src/test/resources/H2TestDB/*.trace.db
+
+*Thumbs.db
+.DS_Store
+.springBeans
+delete-apache-ds
+bin
+.gradle
+target
+build
+
+# Ignore liquibase.database.properties not to share db connection credentils in the repo
+liquibase.*.properties
+.sonar_lock
+# Intellij Config files #
+########################
+/.idea/
+*.iml
+*.ipr
+*.iws
+out
+
+/.vscode/
+
+# Emacs backup files#
+#####################
+
+
+data-generation/output
+data-generation/node_modules
+data-generation/package-lock.json
+data-generation/*.tsv
+study-intake/
