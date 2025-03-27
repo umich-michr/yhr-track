@@ -5,5 +5,5 @@ import org.springframework.stereotype.Service;
 
 @Service
 public interface OriginValidator {
-  boolean isValid(HttpServletRequest request, String siteId);
+  void validate(HttpServletRequest request);
 }

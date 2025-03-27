@@ -1,11 +1,14 @@
 package edu.umich.med.michr.track.util;
 
-import edu.umich.med.michr.track.domain.SiteConfiguration;
+import edu.umich.med.michr.track.domain.ClientConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Utility class for creating test data and test objects.
@@ -14,24 +17,18 @@ import java.util.Set;
 public class TestUtils {
 
   // Constants for common test values
-  public static final String VALID_SITE_ID = "test-site";
-  public static final String VALID_PAGE_URL = "https://example.com/page";
+  public static final Instant FIXED_INSTANT = LocalDateTime
+      .parse("2025-03-26 22:56:38", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+      .toInstant(ZoneOffset.UTC);
+  public static final Clock FIXED_CLOCK = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
 
   private TestUtils() {}
 
-  public static SiteConfiguration createSiteConfig(String siteId, String siteName, String... domains) {
-    SiteConfiguration config = new SiteConfiguration();
-    ReflectionTestUtils.setField(config, "siteId", siteId);
-    ReflectionTestUtils.setField(config, "siteName", siteName);
-    ReflectionTestUtils.setField(config, "authorizedDomains", Arrays.asList(domains));
+  public static ClientConfiguration createClientConfig(String clientId, String name, String... domains) {
+    ClientConfiguration config = new ClientConfiguration();
+    ReflectionTestUtils.setField(config, "id", clientId);
+    ReflectionTestUtils.setField(config, "name", name);
+    ReflectionTestUtils.setField(config, "authorizedOrigins", Arrays.asList(domains));
     return config;
-  }
-
-  public static Set<String> createAuthorizedDomains() {
-    return new HashSet<>(Arrays.asList(
-        "https://example.com",
-        "https://test-app.org",
-        "https://your-tracked-app.com"
-    ));
   }
 }

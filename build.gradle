@@ -70,6 +70,8 @@ bootRun {
 }
 
 test {
+    //java agent config is for mockito, byte-buddy-agent has to be in the path
+    jvmArgs "-javaagent:${configurations.testRuntimeClasspath.find { it.name.contains('byte-buddy-agent') }}"
     testLogging {
         events = ["passed", "skipped", "failed", "standardOut", "standardError"]
         showExceptions = true
