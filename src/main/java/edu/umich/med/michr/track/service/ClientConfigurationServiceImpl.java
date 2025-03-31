@@ -38,7 +38,7 @@ public class ClientConfigurationServiceImpl implements ClientConfigurationServic
   }
 
   private void initCacheIfNeeded() {
-    if (clientConfigCache == null) {
+    if (clientConfigCache == null || clientConfigCache.isEmpty()) {
       List<ClientConfiguration> allConfigs = repository.findAll();
       clientConfigCache = new ConcurrentHashMap<>();
 

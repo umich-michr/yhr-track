@@ -1,25 +1,46 @@
-# Run
+MICHR Track Application
 
-This Spring Boot web application follows the [12 factor app](https://12factor.net/) design guidelines. 
-It supports externalized configuration so that it can run with different settings depending on the environment.
+## Overview
+This is a Spring Boot web application designed to collect analytics data from web applications. 
+It follows the [12-factor app](https://12factor.net/) design guidelines, supporting externalized configuration to run with different settings depending on the environment.
 
-## Configuration Sources
+## CORS Configuration
+Cross-Origin Resource Sharing is configurable through client configurations stored in the database. Each client entry specifies:
 
-When env is not specified, the application uses the default settings from application.properties. 
-Otherwise, when the Gradle project property env is provided, the application will look for an external configuration file in the following order:
-1. User Home Directory:
-<user.home>/.michr-apps/yhr-track/app.properties
-2. Java System Property:
-Specify the file using the system property config (e.g., ./gradlew bootRun -Dconfig=app.properties)
-3. Environment Variable:
-Specify the file using the environment variable YHR_TRACK_CONFIG_FILE (e.g., YHR_TRACK_CONFIG_FILE=app.properties ./gradlew bootRun)
+- Client ID
+- Allowed origins (domains)
 
-Within the external app.properties file, properties prefixed by the value provided via the -Penv argument will be used. (See ExternalConfigEnvironmentPostProcessor for details; this is set up via /src/main/resources/META-INF/spring.factories.)
+The following CORS settings are configured in the code. See the `config/cors` package for details:
 
-## Overriding Configuration Based on Database Target
+- Allowed HTTP methods
+- Allowed headers
+- Additional CORS settings
 
-When running the application locally, you can specify the target database configuration by passing a Gradle property. For example, to use the production settings, run:
-./gradlew bootRun -Penv=prod
+## Configuration
+
+You can configure the application in an external properties file specified by the environment or through command-line arguments, 
+as supported by Spring Boot's externalized configuration. The external configuration file is found by checking
+
+1. User Home Directory: The default location is 
+```
+<user.home>/.michr-apps/track/app.properties
+```
+2. Java System Property: Specify the file using the system property config 
+```shell
+./gradlew bootRun -Dconfig=/some/folder/app.properties)
+```
+3. Environment Variable: Specify the file using the environment variable TRACK_CONFIG_FILE 
+```shell 
+TRACK_CONFIG_FILE=/some/folder/app.properties ./gradlew bootRun
+```
+## Overriding Configuration Based on Target Environment When running Locally
+
+If -Penv argument is used when running gradle then the property entries prefixed by the value of "env" project parameter will be used for configuration.
+(See ExternalConfigEnvironmentPostProcessor for details; this is set up via /src/main/resources/META-INF/spring.factories.)
+```shell 
+./gradlew -Penv=prod bootRun
+# It is expected that the configuration properties file will have properties prefixed with "prod" for the production environment e.g.: prod.DB_USERNAME=MICHR_TRACK
+```
 This command instructs the application to load properties from properties file (specified by the configuration) that are prefixed with prod. (for example, prod.spring.datasource.url). These properties are then added to the environment with the prefix removed.
 
 ## Running Locally Using Embedded DB
@@ -32,8 +53,18 @@ To run the application with an embedded H2 database, simply execute:
 
 To debug the application locally with the embedded database, run:
 
-./gradlew bootrun --debug-jvm -Dspring.profiles.active=dev
-You can use http://localhost:8082/h2-console to access embedded h2 db. Refer to application-dev.properties for the db connection details.
+./gradlew bootrun --debug-jvm
+You can use http://localhost:8080/h2-console to access embedded h2 db. Refer to application-dev.properties for the db connection details.
+
+Initial data is loaded from src/main/resources/data.sql which populates:
+
+Client configurations with allowed origins and CORS settings
+
+### Note on Connection Pool Parameters
+
+When running the application, Hibernate logs may show some connection pool parameters as "undefined/unknown". 
+This is a known issue with how Hibernate logs HikariCP configuration and doesn't indicate a problem with the actual connection pool settings. 
+The configured HikariCP parameters are still applied correctly. To verify the actual settings, enable HikariCP debug logging by adding `logging.level.com.zaxxer.hikari=DEBUG` to your configuration.
 
 ## Debugging Database Integration Tests
 
@@ -54,10 +85,10 @@ headers.setCacheControl("private, max-age=1800"); // 30 minutes
 headers.setETag("\"session-" + sessionId + "\"");
 ```
 
-This is much harder to control precisely with a 204 response due to less consistent caching behavior across clients. For such cases 
-sendBeacon may not be the ideal form of tracking depending on your needs. Also, for email tracking image request is inevitable since 
-js will not execute in email clients. We will need to return 200 with 1pixel image otherwise a broken image will be displayed in the email.
-Not only that, some clients may submit multiple retry requests if the image is not loaded properly.
+1. This is much harder to control precisely with a 204 response due to less consistent caching behavior across clients. For such cases 
+sendBeacon may not be the ideal form of tracking depending on your needs.   
+2. For email tracking, the image request is inevitable since js will not execute in email clients. We will need to return 200 with 1pixel 
+image otherwise a broken image will be displayed in the email. Not only that, some clients may submit multiple retry requests if the image is not loaded properly.
 
 # Submitting tracking requests
 
@@ -82,8 +113,10 @@ the biggest risk would be nothing but the incorrect analytics data.
 
 ```js
 (function() {
-  var clientId = "1";
-  var analyticsUrl = "http://localhost:8080/analytics/events";
+  var clientId = "d2c1e4a7-63c5-4dfd-a392-35636f7ce5ac";
+  // If you like to test the email tracking feature, uncomment the line below.
+  //var emailId = "5902f6aa-8ca5-413b-8646-6079ed9265e7" ;
+  var analyticsUrl = "https://localhost:8080/analytics/events";
 
   // Utility to generate a GUID
   function generateGUID() {
@@ -152,6 +185,8 @@ the biggest risk would be nothing but the incorrect analytics data.
     return {
       userId: userId,
       clientId: clientId,
+      // if tracking emails uncomment the line below and the line where emailId is declared above
+      // emailId: emailId,
       page: window.location.href,
       eventType: eventType,
       // Application-specific cookies (assuming they exist)
@@ -162,9 +197,10 @@ the biggest risk would be nothing but the incorrect analytics data.
 
 
   function serializePayload(json, method) {
-    const separator = method.toUpperCase() === 'GET' ? '-' : '';
     return Object.keys(json).map(key => {
-      const encodedKey = separator ? key.replace(/([A-Z])/g, `${separator}$1`).toLowerCase() : key;
+      const encodedKey = method.toUpperCase() === 'GET'
+        ? key.replace(/([A-Z])/g, '-$1').toLowerCase()
+        : key;
       const encodedValue = encodeURIComponent(json[key]);
       return `${encodedKey}=${encodedValue}`;
     }).join('&');
@@ -210,3 +246,10 @@ the biggest risk would be nothing but the incorrect analytics data.
 
 })();
 ```
+
+## Analytics Request Authorization
+
+For GET/POST requests using browsers fetch or sendBeacon, the Origin or Referrer header is automatically set by the browser. 
+The value of the header is compared to the list of allowed origins for the given client id in CLIENT and AUTHORIZED_CLIENT_ORIGIN records. 
+However, if 1 px image request is used for analytics tracking and if the request is originated from a mail client to track email opens, 
+then those headers can not be used. In that case CLIENT should have a corresponding GUID record in AUTHORIZED_CLIENT_ORIGIN and the image pixed should submit email-id as a request parameter set to the allowed GUID which acts as allowed origin.  

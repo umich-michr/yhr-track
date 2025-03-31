@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public enum StandardParameter {
-  CLIENT_ID,USER_ID,EVENT_TYPE,PAGE;
+  CLIENT_ID,USER_ID,EVENT_TYPE,EMAIL_ID,PAGE;
   private final Map<String, String> requestMethodParamNameMap = new HashMap<>();
   StandardParameter() {
     final String camelCaseParamName  = new CamelCaseNamingStrategy().resolve(this);

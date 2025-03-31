@@ -4,7 +4,6 @@ import edu.umich.med.michr.track.domain.ClientConfiguration;
 import edu.umich.med.michr.track.domain.StandardParameter;
 import edu.umich.med.michr.track.exception.ValidationException;
 import edu.umich.med.michr.track.util.RequestUtil;
-import edu.umich.med.michr.track.util.TestUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -12,166 +11,159 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.mockito.Mockito.verify;
+import java.util.Collections;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("OriginValidatorImpl Tests")
-class OriginValidatorImplTest {
+public class OriginValidatorImplTest {
 
   @Mock
-  private ClientConfigurationService clientConfigService;
+  private ClientConfigurationService clientConfigurationService;
   @Mock
   private RequestUtil requestUtil;
   @Mock
   private HttpServletRequest request;
-  @InjectMocks
+
   private OriginValidatorImpl originValidator;
 
-  private final String clientId = "client1";
-  private final String clientName = "client1-name";
+  @BeforeEach
+  public void setUp() {
+    originValidator = new OriginValidatorImpl(clientConfigurationService, requestUtil);
+  }
 
   @Nested
-  @DisplayName("Standard Parameter Validation")
-  class StandardParameterValidation {
+  @DisplayName("Client ID Validation Tests")
+  class ClientIdValidationTests {
     @ParameterizedTest
     @NullAndEmptySource
-    @DisplayName("Should throw exception when clientId is missing")
-    void testValidate_clientIdIsMissing(String clientId) {
-      // Arrange
-      when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
+    public void testValidate_clientIdMissing(String clientId) {
+      when(requestUtil.getParameterValue(any(), eq(request))).thenReturn(clientId);
 
-      // Act & Assert
-      assertThatThrownBy(() -> originValidator.validate(request))
-          .isInstanceOf(ValidationException.class)
-          .hasMessageContaining("Origin ID could not be found")
-          .extracting("status").isEqualTo(HttpStatus.FORBIDDEN);
+      ValidationException exception = assertThrows(ValidationException.class,
+          () -> originValidator.validate(request));
+      assertEquals("Origin ID could not be found in the request parameter, cannot authorize", exception.getMessage());
+      assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+    }
+
+    @Test
+    public void testValidate_clientConfigurationMissing() {
+      String clientId = "client1";
+      when(requestUtil.getParameterValue(eq(StandardParameter.CLIENT_ID), eq(request))).thenReturn(clientId);
+
+      String originHeader = "https://example.com";
+      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(originHeader);
+
+      when(clientConfigurationService.getClientConfiguration(clientId)).thenReturn(null);
+
+      ValidationException exception = assertThrows(ValidationException.class,
+          () -> originValidator.validate(request));
+      assertEquals("No allowed origins configuration found for the origin, can not authorize requests", exception.getMessage());
+      assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
     }
   }
 
   @Nested
-  @DisplayName("Origin Header Validation")
-  class OriginHeaderValidation {
-
-    @BeforeEach
-    void setupStandardParams() {
-      when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
-    }
+  @DisplayName("Origin Resolution Tests")
+  class OriginResolutionTests {
+    private final String clientId = "client1";
 
     @ParameterizedTest
-    @NullAndEmptySource
-    @DisplayName("Should throw exception when Origin header is missing")
-    void testValidate_originHeaderMissing(String originHeader) {
-      // Arrange
-      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(originHeader);
-
-      // Act & Assert
-      assertThatThrownBy(() -> originValidator.validate(request))
-          .isInstanceOf(ValidationException.class)
-          .hasMessageContaining("Origin header is not set")
-          .extracting("status").isEqualTo(HttpStatus.FORBIDDEN);
-    }
-  }
-
-  @Nested
-  @DisplayName("Site Configuration Validation")
-  class ClientConfigurationValidation {
-    @BeforeEach
-    void setup() {
+    @ValueSource(strings = {"https://referer.com", "https://referer.com/", "https://refEreR.com/", "https://referer.COM"})
+    public void testValidate_resolvesOriginFromRefererWhenOriginHeaderMissing(String referer) {
       when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
-      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn("https://allowed.com");
-    }
 
-    @Test
-    @DisplayName("Should throw exception when ClientConfiguration is not found")
-    void testValidate_clientConfigurationNotFound() {
-      // Arrange
-      when(clientConfigService.getClientConfiguration(clientId)).thenReturn(null);
+      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(null);
+      when(request.getHeader(HttpHeaders.REFERER)).thenReturn(referer);
 
-      // Act & Assert
-      assertThatThrownBy(() -> originValidator.validate(request))
-          .isInstanceOf(ValidationException.class)
-          .hasMessageContaining("No allowed origins configuration found")
-          .extracting("status").isEqualTo(HttpStatus.FORBIDDEN);
-    }
+      ClientConfiguration config = mock(ClientConfiguration.class);
+      when(config.getAuthorizedOrigins()).thenReturn(Collections.singletonList("https://referer.com"));
+      when(clientConfigurationService.getClientConfiguration(clientId)).thenReturn(config);
 
-    @SuppressWarnings("HttpUrlsUsage")
-    @ParameterizedTest
-    @ValueSource(strings = {"https://notallowed.com", "http://unauthorized.org"})
-    @DisplayName("Should throw exception when origin is not allowed")
-    void testValidate_originNotAllowed(String originHeader) {
-      // Arrange
-      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(originHeader);
-      // Create a config with one allowed domain
-      ClientConfiguration config = TestUtils.createClientConfig(clientId, clientName, "https://allowed.com", "https://allowed2.com");
-      when(clientConfigService.getClientConfiguration(clientId)).thenReturn(config);
-
-      // Act & Assert
-      assertThatThrownBy(() -> originValidator.validate(request))
-          .isInstanceOf(ValidationException.class)
-          .hasMessageContaining("Origin is not allowed")
-          .extracting("status").isEqualTo(HttpStatus.FORBIDDEN);
-    }
-
-    @Test
-    @DisplayName("Should pass validation when origin is allowed")
-    void testValidate() {
-      // Arrange
-      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn("https://allowed.com/page");
-      ClientConfiguration config = TestUtils.createClientConfig(clientId, clientName, "https://allowed.com", "https://another.com");
-      when(clientConfigService.getClientConfiguration(clientId)).thenReturn(config);
-
-      // Act & Assert - No exception thrown
       assertDoesNotThrow(() -> originValidator.validate(request));
-      verify(clientConfigService).getClientConfiguration(clientId);
+    }
+
+    @Test
+    public void testValidate_resolvesOriginFromEmailIdForGetRequest() {
+      when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
+
+      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn("");
+      when(request.getHeader(HttpHeaders.REFERER)).thenReturn("");
+      when(request.getMethod()).thenReturn(HttpMethod.GET.name());
+
+      String emailId = "abc-45-jkf";
+      when(requestUtil.getParameterValue(StandardParameter.EMAIL_ID, request)).thenReturn(emailId);
+
+      ClientConfiguration config = mock(ClientConfiguration.class);
+      when(config.getAuthorizedOrigins()).thenReturn(Collections.singletonList(emailId));
+      when(clientConfigurationService.getClientConfiguration(clientId)).thenReturn(config);
+
+      assertDoesNotThrow(() -> originValidator.validate(request));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    public void testValidate_noOriginFound_GET(String origin) {
+      when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
+
+      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(origin);
+      when(request.getHeader(HttpHeaders.REFERER)).thenReturn(origin);
+      when(requestUtil.getParameterValue(StandardParameter.EMAIL_ID, request)).thenReturn(origin);
+      when(request.getMethod()).thenReturn(HttpMethod.GET.name());
+
+      ValidationException exception = assertThrows(ValidationException.class,
+          () -> originValidator.validate(request));
+      assertEquals("No Origin or Referer header found in the request", exception.getMessage());
+      assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    public void testValidate_noOriginFound_POST(String origin) {
+      when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
+
+      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(origin);
+      when(request.getHeader(HttpHeaders.REFERER)).thenReturn(origin);
+      when(request.getMethod()).thenReturn(HttpMethod.POST.name());
+
+      ValidationException exception = assertThrows(ValidationException.class,
+          () -> originValidator.validate(request));
+      assertEquals("No Origin or Referer header found in the request", exception.getMessage());
+      assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
     }
   }
 
   @Nested
-  @DisplayName("Edge Case Tests")
-  class EdgeCaseTests {
-
+  @DisplayName("Authorized Origin Validation Tests")
+  class AuthorizedOriginValidationTests {
     @Test
-    @DisplayName("Should handle case-insensitive origin matching")
-    void testValidate_caseInsensitiveOriginMatching() {
-      // Arrange
+    public void testValidate_originNotAllowed() {
+      String clientId = "client5";
       when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
-      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn("https://ExAMPLE.com");
-      ClientConfiguration config = TestUtils.createClientConfig(clientId, clientName, "https://exaMple.com");
-      when(clientConfigService.getClientConfiguration(clientId)).thenReturn(config);
 
-      // Act & Assert - Should throw because of case mismatch
-      assertThatThrownBy(() -> originValidator.validate(request))
-          .isInstanceOf(ValidationException.class)
-          .hasMessageContaining("Origin is not allowed");
-    }
+      final String origin = "https://notallowed.com";
+      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(origin);
 
-    @SuppressWarnings("HttpUrlsUsage")
-    @ParameterizedTest
-    @CsvSource({"https://example.com, http://example.com","http://example.com, https://example.com"})
-    @DisplayName("Should handle protocol differences correctly")
-    void testValidate_protocolDifferencesCorrectly(String originHeader, String allowedOrigin) {
-      // Arrange
-      when(requestUtil.getParameterValue(StandardParameter.CLIENT_ID, request)).thenReturn(clientId);
-      when(request.getHeader(HttpHeaders.ORIGIN)).thenReturn(originHeader);
-      ClientConfiguration config = TestUtils.createClientConfig(clientId, clientName, allowedOrigin);
-      when(clientConfigService.getClientConfiguration(clientId)).thenReturn(config);
+      ClientConfiguration config = mock(ClientConfiguration.class);
+      when(config.getAuthorizedOrigins()).thenReturn(Collections.singletonList("https://allowed.com"));
+      when(clientConfigurationService.getClientConfiguration(clientId)).thenReturn(config);
 
-      // Act & Assert - Should throw because of protocol mismatch
-      assertThatThrownBy(() -> originValidator.validate(request))
-          .isInstanceOf(ValidationException.class)
-          .hasMessageContaining("Origin is not allowed");
+      ValidationException exception = assertThrows(ValidationException.class,
+          () -> originValidator.validate(request));
+      assertEquals("Origin is not allowed", exception.getMessage());
+      assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
     }
   }
 }

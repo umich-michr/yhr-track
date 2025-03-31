@@ -9,7 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * application can start up properly.
  */
 @SpringBootTest
-class YhrTrackApplicationTests {
+class TrackApplicationTests {
   @Test
   void contextLoads() {
   }

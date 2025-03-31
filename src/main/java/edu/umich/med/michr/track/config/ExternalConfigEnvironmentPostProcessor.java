@@ -17,7 +17,7 @@ import java.util.Optional;
 
 /**
  * Spring EnvironmentPostProcessor that loads external configuration from various sources
- * with a defined precedence order.
+ * with a defined precedence order. (used by spring.factories under META-INF to load this class)
  */
 public class ExternalConfigEnvironmentPostProcessor implements EnvironmentPostProcessor {
   private static final Logger logger = LoggerFactory.getLogger(ExternalConfigEnvironmentPostProcessor.class);
