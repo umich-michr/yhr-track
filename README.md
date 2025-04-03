@@ -73,6 +73,69 @@ Otherwise, the H2 web console thread may also be suspended, preventing access to
 
 See application-test.properties for the datasource URL and credentials needed to connect to the H2 database.
 
+## Deploying to Production
+
+### Self-Executable JAR with Embedded Tomcat Server
+
+To build a self-executable JAR file with an embedded Tomcat server and deploy it with SSL and external configuration properties, follow these steps:
+
+1. **Build the JAR:**
+   ```shell
+   ./gradlew clean build
+   ```
+2. **Deploy the Application:**
+    - Copy the JAR file and keystore to the target server.
+    - Create an `app.properties` file with the necessary configuration.
+    - Run the application:
+      ```shell
+      # You can also use the -Dconfig option to specify the properties file (see the configuration section above) or built-in spring parameter: -Dspring.config.location=classpath:/,file:./app.properties (combines classpath and file locations)
+      TRACK_CONFIG_FILE=/path/to/app.properties java -Djava.security.egd=file:/dev/./urandom -Dserver.ssl.key-store=./keystore.jks -Dserver.ssl.key-store-password=changeit -jar build/libs/your-app.jar
+      ```
+
+### WAR File for Standalone Tomcat
+
+To build a WAR file and deploy it to a standalone Tomcat instance:
+
+1. **Build the WAR:**
+   ```shell
+   ./gradlew clean build
+   ```
+
+2. **Deploy the WAR to Tomcat:**
+    - Copy the WAR file to the Tomcat `webapps` directory.
+    - Configure Tomcat for application configuration parameters:
+        - Create a `context.xml` file in the `conf` directory of Tomcat with the following content:
+          ```xml
+          <Context>
+            <Environment name="TRACK_CONFIG_FILE" value="/path/to/app.properties" type="java.lang.String" />
+          </Context>
+          ```
+          or you can also rely on spring configuration parameter to combine properties from classpath and file locations:
+       ```xml
+          <Context>
+            <Parameter name="spring.config.location" value="file:/path/to/app.properties" />
+          </Context>
+       ```
+        - or you can use app specific context by using the `[applicatin context e.g.: track in case your context is /track].xml` file in the `conf/Catalina/localhost`
+        - Configure Tomcat for SSL:
+          - Update `server.xml` in the Tomcat `conf` directory to include the SSL configuration (you can use type="RSA" or type="EC" depending on encryption type):
+            ```xml
+            <Connector port="8443" protocol="org.apache.coyote.http11.Http11NioProtocol" maxThreads="150" SSLEnabled="true">
+              <SSLHostConfig>
+                <Certificate certificateKeystoreFile="path/to/keystore.jks" type="EC" />
+              </SSLHostConfig>
+            </Connector>
+            ```
+
+3. **Deploy `app.properties`:**
+    - Place `app.properties` in a location accessible to the application.
+    - Configure the Tomcat context to use the properties file:
+      ```xml
+      <Context>
+          <Parameter name="spring.config.location" value="file:/path/to/app.properties" />
+      </Context>
+      ```
+
 # Tracking with Image Pixels (GET)
 
 Let's say you want to track unique page views but not repeated views within a 30-minute window:
